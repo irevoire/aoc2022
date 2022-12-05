@@ -20,9 +20,12 @@ fn main() {
         println!(" {} ", "-".repeat(setup.crates.len() * 5 - 2));
         println!();
 
-        let mut crates = (0..instr.number)
-            .map(|_| setup.crates[instr.from - 1].pop().unwrap())
+        let len = setup.crates[instr.from - 1].len();
+
+        let mut crates = setup.crates[instr.from - 1]
+            .drain(len - instr.number..)
             .collect::<Vec<char>>();
+
         setup.crates[instr.to - 1].append(&mut crates);
     }
 
