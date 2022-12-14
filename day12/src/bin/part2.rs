@@ -9,7 +9,6 @@ fn main() {
             .collect(),
     );
 
-    let starting_position = grid.position(|&c| c == 'S').unwrap();
     let ending_position = grid.position(|&c| c == 'E').unwrap();
 
     let grid = grid.map(|height| match height {
@@ -18,10 +17,14 @@ fn main() {
         b => b as u8 - b'a',
     });
 
-    println!("starts at {:?}", starting_position);
     println!("ends at {:?}", ending_position);
 
-    let mut available = vec![(starting_position, 0)];
+    let mut available = grid
+        .enumerate()
+        .filter(|(_, h)| **h == 0)
+        .map(|(coord, _)| (coord, 0))
+        .collect::<Vec<_>>();
+
     let mut explored = HashSet::new();
 
     loop {
