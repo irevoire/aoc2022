@@ -24,7 +24,7 @@ fn main() {
             Some(*head)
         })
         .scan(Coord::<isize>::at(0, 0), |tail, head| {
-            if tail.chebyshev_adjacent(&head) {
+            if tail.is_chebyshev_adjacent(&head) {
                 Some(None)
             } else {
                 tail.move_toward(&head);
