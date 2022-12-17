@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 aoc = { git = "https://github.com/irevoire/aoc" }
-# parse-display = "0.6.0"
-parse-display = { path = "../../parse-display/parse-display" }
+parse-display = "0.6.0"
