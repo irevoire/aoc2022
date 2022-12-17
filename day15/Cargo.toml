@@ -8,3 +8,9 @@ edition = "2021"
 [dependencies]
 aoc = { git = "https://github.com/irevoire/aoc" }
 parse-display = "0.6.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
