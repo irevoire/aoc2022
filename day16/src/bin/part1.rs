@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use aoc::rand::seq::SliceRandom;
+use aoc::rand::Rng;
 use aoc::{parser, Graph, Id, Itertools};
 use parse_display::FromStr;
 
@@ -24,6 +27,8 @@ impl std::str::FromStr for Valves {
         std::result::Result::Ok(Valves(s.split(',').map(|s| s.trim().to_string()).collect()))
     }
 }
+
+static MAX: AtomicUsize = AtomicUsize::new(0);
 
 fn main() {
     let mut graph = Graph::<String>::new_undirected();
@@ -50,44 +55,138 @@ fn main() {
         .map(|(id, _)| *id)
         .collect();
 
-    let mut distances = HashMap::new();
-    // for nodes in to_do.iter().combinations(2) {
-    //     let (left, right) = (*nodes[0], *nodes[1]);
-    //     let distance = graph.distance_between(left, right).unwrap();
-    //     distances.insert((left, right), distance);
-    //     distances.insert((right, left), distance);
-    // }
-    // dbg!(&distances);
+    let distances = graph.generate_cache();
+    let distances = &distances;
 
-    // let best_solution =
-    //     ["DD", "BB", "JJ", "HH", "EE", "CC"].map(|valve| graph.get_id(&valve.to_string()).unwrap());
-
-    // let ret = play_scenario(&graph, &flow, &best_solution);
-
-    let mut max = 0;
-    let len = to_do.len();
+    // let mut max = 0;
+    // let len = to_do.len();
     let start = graph.get_id(&String::from("AA")).unwrap();
-    for scenario in to_do.into_iter().permutations(len) {
-        let ret = play_scenario(start, &graph, &mut distances, &flow, &scenario);
-        if ret > max {
-            max = ret;
-            println!("current max {}", max);
+
+    let mut ids = to_do.clone();
+    let mut max = 0;
+    let started_at = std::time::Instant::now();
+    let mut last_solution = std::time::Instant::now();
+
+    loop {
+        far_away(&mut ids);
+        let ret = play_scenario(start, &distances, &flow, &ids);
+        if last_solution.elapsed() >= Duration::from_secs(2) {
+            break;
         }
-        // println!("len: {}", to_do.len());
+        if ret > max {
+            last_solution = std::time::Instant::now();
+            max = ret;
+            println!("current max {}", ret);
+        }
     }
 
-    println!("{}", max);
+    println!(
+        "Finished the fully random phase in {:?}",
+        started_at.elapsed()
+    );
+    println!("The current max is {}", max);
+
+    let good_enough = max - (max / 20);
+
+    println!(
+        "Collecting interesting solutions. Anything higher than {}",
+        good_enough
+    );
+
+    let started_at = std::time::Instant::now();
+    let mut interesting = Vec::new();
+    loop {
+        far_away(&mut ids);
+        let ret = play_scenario(start, &distances, &flow, &ids);
+        if ret > good_enough {
+            interesting.push(ids.clone());
+            if started_at.elapsed() >= Duration::from_secs(10) || interesting.len() == 1000 {
+                break;
+            }
+        }
+    }
+    println!(
+        "Collected {} interesting solutions in {:?}.",
+        interesting.len(),
+        started_at.elapsed()
+    );
+
+    for ids in interesting {
+        for _ in 0..1000 {
+            let mut ids = ids.clone();
+            for _ in 0..100 {
+                close_away(&mut ids);
+                let ret = play_scenario(start, &distances, &flow, &ids);
+                if ret > max {
+                    max = ret;
+                    println!("current max {}", ret);
+                }
+            }
+        }
+    }
+
+    // let (tdistances, tflow, tto_do) = (distances.clone(), flow.clone(), to_do.clone());
+    // std::thread::spawn(move || test_random_solution(start, tdistances, tflow, tto_do));
+    // let (tdistances, tflow, tto_do) = (distances.clone(), flow.clone(), to_do.clone());
+    // std::thread::spawn(move || test_random_solution(start, tdistances, tflow, tto_do));
+    // let (tdistances, tflow, tto_do) = (distances.clone(), flow.clone(), to_do.clone());
+    // std::thread::spawn(move || test_random_solution(start, tdistances, tflow, tto_do));
+    // let (tdistances, tflow, tto_do) = (distances.clone(), flow.clone(), to_do.clone());
+    // std::thread::spawn(move || test_random_solution(start, tdistances, tflow, tto_do));
+
+    // test_random_solution(start, distances.clone(), flow.clone(), to_do.clone())
+    // for scenario in to_do.into_iter().permutations(len) {
+    //     let ret = play_scenario(start, &mut distances, &flow, &scenario);
+    //     if ret > max {
+    //         max = ret;
+    //         println!("current max {}", max);
+    //     }
+    // println!("len: {}", to_do.len());
+    // }
+
+    // println!("{}", max);
 }
 
-// fn far_away(elements: &mut [Id]) {
-//     let mut rng = aoc::rand::thread_rng();
-//     elements.shuffle(&mut rng);
-// }
+fn test_random_solution(
+    start: Id,
+    distances: HashMap<(Id, Id), usize>,
+    flow: HashMap<Id, usize>,
+    ids: Vec<Id>,
+) {
+    let mut ids = ids.to_vec();
+    loop {
+        far_away(&mut ids);
+        let ret = play_scenario(start, &distances, &flow, &ids);
+        if ret > MAX.load(Ordering::Relaxed) {
+            MAX.store(ret, Ordering::Relaxed);
+            println!("current max {}", ret);
+        }
+    }
+}
+
+// randomize all the elements in the array
+fn far_away(elements: &mut [Id]) {
+    let mut rng = aoc::rand::thread_rng();
+    elements.shuffle(&mut rng);
+}
+
+// swap two elements randomly
+fn close_away(elements: &mut [Id]) {
+    let mut rng = aoc::rand::thread_rng();
+    let pos = rng.gen_range(0..elements.len());
+    let left = elements[pos];
+    if pos + 1 == elements.len() {
+        elements[pos] = elements[0];
+        elements[0] = left;
+    } else {
+        elements[pos] = elements[pos + 1];
+        elements[pos + 1] = left;
+    }
+}
 
 fn play_scenario(
     start: Id,
-    graph: &Graph<String>,
-    distances: &mut HashMap<(Id, Id), usize>,
+    distances: &HashMap<(Id, Id), usize>,
     flow: &HashMap<Id, usize>,
     ids: &[Id],
 ) -> usize {
@@ -102,17 +201,12 @@ fn play_scenario(
         let distance = match distances.get(&(current_position, *id)) {
             Some(distance) => distance + 1,
             None => {
-                println!("cache miss");
-                let (left, right) = (current_position, *id);
-                let distance = graph.distance_between(left, right).unwrap();
-                distances.insert((left, right), distance);
-                distances.insert((right, left), distance);
-                distance + 1
+                unreachable!()
             }
         };
         minutes -= distance as isize;
         // println!("{} minutes left", minutes);
-        if minutes < 0 {
+        if minutes <= 0 {
             return pressure_released + (minutes.abs() as usize * pressure_releasing);
         }
         // println!("adding {} * {}", pressure_releasing, distance);
